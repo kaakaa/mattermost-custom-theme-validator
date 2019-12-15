@@ -7,6 +7,7 @@ const MyParser = Parser.extend(
     require('acorn-jsx')()
 )
 
+// Find defined keys of custom theme element in mattermost-webapp
 const findDefinedMembers = () => {
     const file = fs.readFileSync('./mattermost-webapp/utils/constants.jsx', {encoding: 'utf-8'});
 
@@ -28,31 +29,15 @@ const findDefinedMembers = () => {
     return definedKeys;
 }
 
-
-const findMissingKey = (path, theme, definedMembers, referedMembers) => {
-    console.log(path);
-    const keys = new Set(Object.keys(theme).concat(definedMembers).concat(Array.from(referedMembers)));
-    const ret = Array.from(keys).map(k => {
-        let obj = {key: k, decl: false, def: false, ref: false};
-        if (Object.keys(theme).includes(k)) obj.decl = true;
-        if (definedMembers.includes(k)) obj.def = true;
-        if (referedMembers.has(k)) obj.ref = true;
-        return obj;
-    })
-
-    const missing = [];
-    ret.forEach(v => {
-        if (v.ref && !v.decl) missing.push(v.key);
-    })
-    console.log("  Missing : ", missing);
-}
-
+// Find refered key in "applyTheme" fund in mattermost-webapp
+// For example, if the argument of "changeOpacity" func is undefined, applying theme in mattermost will be failed.
 const findReferedMembers = () => {
     const path = './mattermost-webapp/utils/utils.jsx';
     const file = fs.readFileSync(path);
     let set = new Set();
 
     try {
+        // Find usages of theme element in "applyTheme" func
         walk.simple(MyParser.parse(file, {sourceType: 'module'}), {
             FunctionDeclaration(node) {
                 if (node.id.name != 'applyTheme') {
@@ -77,8 +62,28 @@ const findReferedMembers = () => {
     return set;
 }
 
+// Find invalid(missing) element in defined themes
+const findMissingKey = (path, theme, definedMembers, referedMembers) => {
+    console.log(path);
+    const keys = new Set(Object.keys(theme).concat(definedMembers).concat(Array.from(referedMembers)));
+    const ret = Array.from(keys).map(k => {
+        let obj = {key: k, decl: false, def: false, ref: false};
+        if (Object.keys(theme).includes(k)) obj.decl = true;
+        if (definedMembers.includes(k)) obj.def = true;
+        if (referedMembers.has(k)) obj.ref = true;
+        return obj;
+    })
 
+    const missing = [];
+    ret.forEach(v => {
+        if (v.ref && !v.decl) missing.push(v.key);
+    })
+    console.log("  Missing : ", missing);
+}
 
+/* ------------------- */
+
+// Collect defined element
 const definedMembers = findDefinedMembers();
 const referedMembers = findReferedMembers();
 
@@ -87,7 +92,7 @@ glob('./themes/**/*.json', {}, (err, files) => {
     files.forEach(path => findMissingKey(path, require(path), definedMembers, referedMembers));
 });
 
-// Validate mattermost-themes
+// Validate themes in mattermost-themes
 glob('./mattermost-themes/src/themes/*.js', {}, (err, files) => {
     files.forEach(path => {
         const c = fs.readFileSync(path);
